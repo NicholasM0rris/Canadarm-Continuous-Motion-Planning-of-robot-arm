@@ -10,7 +10,10 @@ from robot_config import make_robot_config_from_ee1, make_robot_config_from_ee2
 from obstacle import Obstacle
 from angle import Angle
 
-
+'''
+Useful link on PRM
+http://www.cs.columbia.edu/~allen/F15/NOTES/Probabilisticpath.pdf
+'''
 class Obstacle:
     """
     Class representing a rectangular obstacle. You may add to this class if you wish, but you should not modify the
@@ -337,12 +340,10 @@ class GraphNode:
 
 def solve(spec):
     """
-    An example solve method containing code to perform a breadth first search of the state graph and return a list of
+    Solve method containing code to perform a breadth first search of the state graph and return a list of
     configs which form a path through the state graph between the initial and the goal. Note that this path will not
     satisfy the primitive step requirement - you will need to interpolate between the configs in the returned list.
 
-    If you wish to use this code, you may either copy this code into your own file or add your existing code to this
-    file.
 
     :param spec: ProblemSpec object
     :return: List of configs forming a path through the graph from initial to goal
@@ -395,26 +396,6 @@ def main():
     # print(problem_spec.obstacles[0].corners[0][0])
     # print('bc', bottom_left_corner[0][0])
 
-    ''' For plotting the obstacles'''
-    '''
-    for j in range(len(problem_spec.obstacles)):
-        # print('j', j)
-        for i in range(len(problem_spec.obstacles[0].corners)):
-            # print('i', i)
-            if problem_spec.obstacles[j].corners[i][0] <= bottom_left_corner[j][0]:
-                if problem_spec.obstacles[j].corners[i][1] <= bottom_left_corner[j][1]:
-                    bottom_left_corner[j] = (problem_spec.obstacles[0].corners[i][0], problem_spec.obstacles[0].corners[i][1])
-        #print('bottom left corner', bottom_left_corner)
-    #print('bottom left corner', bottom_left_corner)
-   
-    x_ob = []
-    y_ob = []
-    for i in range(len(problem_spec.obstacles[0].corners)):
-        x_ob.append(problem_spec.obstacles[0].corners[i][0])
-        y_ob.append(problem_spec.obstacles[0].corners[i][1])
-    print(x_ob)
-    print(y_ob)
-    '''
     # Create a PRM with X min, X max, Y min, X max, N samples, Obstacles, Grapple points, EE2 goal_x, EE2_goal_y, EE2_initial_x, EE2_initial_y
     prm = PRM(0, 1, 0, 1, 100, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
               problem_spec.goal.get_ee2()[1], problem_spec.initial.get_ee2()[0], problem_spec.initial.get_ee2()[1])
