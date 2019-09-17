@@ -179,7 +179,7 @@ class Node:
 
 class PRM:
 
-    def __init__(self, x_max, x_min, y_max, y_min, N, obstacle):
+    def __init__(self, x_max, x_min, y_max, y_min, N, obstacle, grapple_points, goal_x, goal_y):
         self.x_max = x_max
 
         self.y_max = y_max
@@ -194,6 +194,20 @@ class PRM:
 
         self.obstacle = obstacle
 
+        self.grapple = grapple_points
+
+        self.goal = [goal_x, goal_y]
+        # Add grapple points as nodes - ID always 1 - num. grapple pts
+        for i in range(len(grapple_points)):
+            self.nodes.append(Node(grapple_points[i][0], grapple_points[i][1], i + 1))
+
+        # Add the goal as a node - Always has ID of 0
+        self.nodes.append(Node(goal_x, goal_y, 0))
+        # print(goal_x, goal_y)
+
+        #self.nodes.append(Node(1,1,1))
+        self.num_grapples = len(grapple_points)
+
     def generate_random_points(self):
         """ Generate N random sample points"""
         total = 0
@@ -203,12 +217,13 @@ class PRM:
 
                      np.random.uniform(self.y_min, self.y_max, 1)[0],
 
-                     total + 2)
+                     total + self.num_grapples + 1)
 
             # if (not self.intersectsObs(p.point, p.point, obsVec) and self.isWithinWorld(p.point)):
             # print(p.point)
             if not in_obstacle(self.obstacle, p):
                 self.nodes.append(p)
+
             # Indent line below to ensure N points generated
             total += 1
         print(total)
@@ -226,7 +241,8 @@ class PRM:
                 if i.node_id != j.node_id:
                     # Add distance between points
                     distances.append((self.get_distance(i.point, j.point), j))
-            distances = sorted(distances)
+            # Sort from smallest to largest distance
+            distances = sorted(distances, key=lambda d: d[0])
             # for each set of points add the k nearest neighbours
             k = 0
             for points in distances:
@@ -235,7 +251,7 @@ class PRM:
                 # print('POINTS', points[1])
                 i.neighbours.append(points[1])
                 k += 1
-        #print('NEIGHBOURS', i.neighbours[0].point)
+        # print('NEIGHBOURS', i.neighbours[0].point)
 
     def get_distance(self, point1, point2):
         """ Get the Euclidean distance between two points """
@@ -244,11 +260,24 @@ class PRM:
         distance = math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
         return distance
 
+    def line_segment_collision(self, node, obstacle_corner):
+        """ Check whether there is a intersection between two line segments
+        :param node: A node class object
+        :param obstacle_corner: A tuple containing x and y coordinates for obstacle corner
+        """
+        obstacle_corner = list(obstacle_corner)
+        a = node.x
+        b = node.y
+        c = obstacle_corner[0]
+        d = obstacle_corner[1]
+        area_abc = 
+        return True
+
 
 def main():
     # print(np.random.uniform(0, 100, size=10))
-
-    problem_spec = ProblemSpec('testcases/4g3_m2.txt')
+    testcase = 'testcases/4g3_m2.txt'
+    problem_spec = ProblemSpec(testcase)
     # print(problem_spec.obstacles[0].corners)
     bottom_left_corner = []
     x_length = []
@@ -282,10 +311,14 @@ def main():
     print(x_ob)
     print(y_ob)
     '''
-
-    prm = PRM(0, 1, 0, 1, 100, problem_spec.obstacles)
-    print(problem_spec.obstacles)
+    # Create a PRM with X min, X max, Y min, X max, N samples, Obstacles
+    prm = PRM(0, 1, 0, 1, 100, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
+              problem_spec.goal.get_ee2()[1])
+    # print(problem_spec.obstacles)
+    print('goal', problem_spec.goal_x)
+    # Generate random points for the prm
     prm.generate_random_points()
+    # Get k neighbours for the random points
     prm.get_k_neighbours()
     # print('obs', in_obstacle(problem_spec.obstacles[0],(0.3,0.2)))
     k = 0
@@ -314,16 +347,18 @@ def main():
     # print(dist)
     ''''''
 
-    fig = plt.figure()
+    fig = plt.figure(testcase)
     ax = fig.add_subplot(1, 1, 1)
     ''' Plot the obstacles'''
     for i in range(len(problem_spec.obstacles)):
         ax.add_patch(patches.Rectangle(bottom_left_corner[i], x_length[i], y_length[i], zorder=-1))
     ''' Plot the sampled points '''
-    plt.scatter(x, y, color='red', s=3)
+    plt.scatter(x, y, color='red', s=30)
+
     ''' Plot the grapple points'''
     for i in range(len(problem_spec.grapple_points)):
         plt.scatter(problem_spec.grapple_points[i][0], problem_spec.grapple_points[i][1], color='blue', s=30)
+
     ''' Plot the goal point'''
     plt.scatter(problem_spec.goal.get_ee2()[0], problem_spec.goal.get_ee2()[1], color='green', s=100)
     # plt.scatter(bottom_left_corner[0], bottom_left_corner[1], color='red', s=3000)
@@ -331,8 +366,12 @@ def main():
     for i in range(len(prm.nodes)):
         for j in range(len(prm.nodes[i].neighbours)):
             # print('SCATTER', prm.nodes[i].neighbours[j])
-            plt.plot([prm.nodes[i].x, prm.nodes[i].neighbours[j].x], [prm.nodes[i].y, prm.nodes[i].neighbours[j].y], 'r-')
+            plt.plot([prm.nodes[i].x, prm.nodes[i].neighbours[j].x], [prm.nodes[i].y, prm.nodes[i].neighbours[j].y],
+                     'y-')
     # plt.plot([x1, x2], [y1, y2], 'k-')
+    plt.title(testcase)
+    plt.xlabel('X coordinates')
+    plt.ylabel('Y coordinates')
     plt.show()
 
 
