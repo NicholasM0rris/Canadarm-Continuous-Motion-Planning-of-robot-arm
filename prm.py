@@ -205,7 +205,7 @@ class PRM:
         self.nodes.append(Node(goal_x, goal_y, 0))
         # print(goal_x, goal_y)
 
-        #self.nodes.append(Node(1,1,1))
+        # self.nodes.append(Node(1,1,1))
         self.num_grapples = len(grapple_points)
 
     def generate_random_points(self):
@@ -226,8 +226,8 @@ class PRM:
 
             # Indent line below to ensure N points generated
             total += 1
-        print(total)
-        print(len(self.nodes))
+        # print(total)
+        # print(len(self.nodes))
 
     def get_k_neighbours(self):
         """ Pair q (every sample point) to k nearest neighbours (q') """
@@ -238,7 +238,7 @@ class PRM:
             distances = []
             for j in self.nodes:
                 # Check not comparing the same point to itself and edge does not intersect obstacle
-                if i.node_id != j.node_id:
+                if (i.node_id != j.node_id) and not (self.obstacle_collision(i, j, self.obstacle)):
                     # Add distance between points
                     distances.append((self.get_distance(i.point, j.point), j))
             # Sort from smallest to largest distance
@@ -260,18 +260,44 @@ class PRM:
         distance = math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
         return distance
 
-    def line_segment_collision(self, node, obstacle_corner):
+    def line_segment_collision(self, node1, node2, obstacle_corner1, obstacle_corner2):
         """ Check whether there is a intersection between two line segments
-        :param node: A node class object
-        :param obstacle_corner: A tuple containing x and y coordinates for obstacle corner
+        :param node1: A node class object
+        :param node2: A node class object
+        :param obstacle_corner1: A tuple containing x and y coordinates for obstacle corner
+        :param obstacle_corner2: A tuple containing x and y coordinates for obstacle corner
         """
-        obstacle_corner = list(obstacle_corner)
-        a = node.x
-        b = node.y
-        c = obstacle_corner[0]
-        d = obstacle_corner[1]
-        area_abc = 
-        return True
+        obstacle_corner1 = list(obstacle_corner1)
+        obstacle_corner2 = list(obstacle_corner2)
+        a = [node1.x, node1.y]
+        b = [node2.x, node2.y]
+        c = obstacle_corner1
+        d = obstacle_corner2
+        area_abc = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])
+        area_abd = (b[0] - a[0]) * (d[1] - a[1]) - (d[0] - a[0]) * (b[1] - a[1])
+        area_cda = (d[0] - c[0]) * (a[1] - c[1]) - (a[0] - c[0]) * (d[1] - c[1])
+        area_cdb = (d[0] - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (d[1] - c[1])
+        # If abc and abd have different orientations AND cda and cbd have different orientations, there is a line collision between ab and cd
+        if (np.sign(area_abc) != np.sign(area_abd)) and (np.sign(area_cda) != np.sign(area_cdb)):
+            return True
+        # There is no line collision
+        return False
+
+    def obstacle_collision(self, node1, node2, obstacles):
+        """ Check the line segment between two nodes and check if it collides with any four segments that make up a rectangle obstacl
+            :param node1: A node point containing x and y coordinate
+            :param node2: A node point containing x and y coordinate
+            :param obstacle_edges: A list of tuples that contain the paired corners
+            e.g Obstacles [((0.2, 0.0), (0.2, 0.095)), ((0.2, 0.095), (1.0, 0.095)), ((1.0, 0.095), (1.0, 0.0)), ((1.0, 0.0), (0.2, 0.0))]
+        """
+
+        # Check line collisions
+        for i in range(len(obstacles)):
+            for j in range(len(obstacles[i].edges)):
+                if self.line_segment_collision(node1, node2, obstacles[i].edges[j][0], obstacles[i].edges[j][1]):
+                    return True
+
+        return False
 
 
 def main():
@@ -312,10 +338,10 @@ def main():
     print(y_ob)
     '''
     # Create a PRM with X min, X max, Y min, X max, N samples, Obstacles
-    prm = PRM(0, 1, 0, 1, 100, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
+    prm = PRM(0, 1, 0, 1, 10, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
               problem_spec.goal.get_ee2()[1])
     # print(problem_spec.obstacles)
-    print('goal', problem_spec.goal_x)
+    # print('goal', problem_spec.goal_x)
     # Generate random points for the prm
     prm.generate_random_points()
     # Get k neighbours for the random points
@@ -336,6 +362,7 @@ def main():
     print('Goal point', problem_spec.goal)
     print('Goal EE1', problem_spec.goal.get_ee1())
     print('Goal EE2', problem_spec.goal.get_ee2())
+    print('Obstacles', problem_spec.obstacles[0].edges[0][0])
     # p1 = [0, 0]
     # p2 = [2, 2]
     # dist = math.sqrt( (p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 )
