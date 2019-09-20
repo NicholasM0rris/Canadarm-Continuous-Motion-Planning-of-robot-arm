@@ -6,6 +6,7 @@ import time
 from tester import test_config_equality
 
 import sys
+import robot_config
 from robot_config import make_robot_config_from_ee1, make_robot_config_from_ee2
 from obstacle import Obstacle
 from angle import Angle
@@ -14,14 +15,11 @@ from angle import Angle
 Useful link on PRM
 http://www.cs.columbia.edu/~allen/F15/NOTES/Probabilisticpath.pdf
 '''
+
+
 class Obstacle:
     """
-    Class representing a rectangular obstacle. You may add to this class if you wish, but you should not modify the
-    existing functions or variable names.
-
-    COMP3702 2019 Assignment 2 Support Code
-
-    Last updated by njc 24/08/19
+    Class representing a rectangular obstacle.
     """
 
     def __init__(self, x1, y1, x2, y2):
@@ -143,7 +141,12 @@ class ProblemSpec:
         self.obstacles = obstacles
         self.goal_x = goal_eex
         self.goal_y = goal_eey
-
+        self.goal_angles = []
+        for i in range(len(goal_angles)):
+            self.goal_angles.append(in_degrees(goal_angles[i].radians))
+        self.initial_angles = []
+        for i in range(len(initial_angles)):
+            self.initial_angles.append(in_degrees(initial_angles[i].radians))
 
 def next_valid_line(f):
     # skip comments and empty lines, return None on EOF
@@ -206,17 +209,30 @@ def line_segment_collision(node1, node2, obstacle_corner1, obstacle_corner2):
 
 class Node:
 
-    def __init__(self, x, y, node_id):
+    def __init__(self, x, y, node_id, angle, parent=None):
         self.point = (x, y)
         self.x = x
         self.y = y
         self.node_id = node_id
         self.neighbours = []
+        self.angles = angle
+        self.configuration = [x, y]
+        self.configuration.extend(angle)
+
+        self.parent = parent
+        self.configuration.append(self.parent)
+
+    def get_successors(self):
+        """ Returns a nodes neighbours
+            :param node: A Node class object
+        """
+        return self.neighbours
 
 
 class PRM:
 
-    def __init__(self, x_max, x_min, y_max, y_min, N, obstacle, grapple_points, goal_x, goal_y, initial_x, initial_y):
+    def __init__(self, x_max, x_min, y_max, y_min, N, obstacle, grapple_points, goal_x, goal_y, initial_x, initial_y,
+                 min_lengths, max_lengths, initial_ee1, goal_angles, initial_angles):
         self.x_max = x_max
 
         self.y_max = y_max
@@ -231,17 +247,42 @@ class PRM:
 
         self.obstacle = obstacle
 
+        self.goal_angles = goal_angles
+
+        self.initial_angles = initial_angles
+
+        self.initial_ee1_x = initial_ee1[0]
+
+        self.initial_ee1_y = initial_ee1[1]
+
         self.grapple = grapple_points
 
-        self.goal = [goal_x, goal_y]
-        # Add grapple points as nodes - ID always 1 - num. grapple pts
-        for i in range(len(grapple_points)):
-            self.nodes.append(Node(grapple_points[i][0], grapple_points[i][1], i + 2))
+        self.min_lengths = min_lengths
 
-        # Add the goal as a node - Always has ID of 0
-        self.nodes.append(Node(goal_x, goal_y, 0))
-        # Add initial EE2 as node - Always had ID of 1
-        self.nodes.append(Node(initial_x, initial_y, 1))
+        self.max_lengths = max_lengths
+
+        self.num_links = len(min_lengths)
+
+        self.initial_x = initial_x
+
+        self.initial_y = initial_y
+
+        self.goal = [goal_x, goal_y]
+
+        """ Add the goal as a node - Always has ID of 0 """
+        self.nodes.append(Node(goal_x, goal_y, 0, self.goal_angles))
+        # print(goal_x, goal_y, self.goal_angles)
+        print('goal node', self.nodes[0].configuration)
+
+        """ Add initial EE2 as node - Always had ID of 1 """
+        self.nodes.append(Node(initial_x, initial_y, 1, self.initial_angles))
+
+        ''' Add grapple points as nodes - ID always 1 - num. grapple pts '''
+        for i in range(len(grapple_points)-1):
+            self.nodes.append(Node(grapple_points[i+1][0], grapple_points[i+1][1], i + 2, 1))
+
+        # print(self.nodes[0])
+
         # print(goal_x, goal_y)
 
         # self.nodes.append(Node(1,1,1))
@@ -252,21 +293,43 @@ class PRM:
         total = 0
 
         while total < self.num_nodes:
+
+            angles = np.random.uniform(15, 165, self.num_links)
+
+            # print(angles)
+            # print(self.initial_x)
+            config = robot_config.make_robot_config_from_ee1(lengths=self.min_lengths, angles=angles,
+                                                             x=self.initial_ee1_x,
+                                                             y=self.initial_ee1_y)
+            # print(self.initial_ee1_x, self.initial_ee1_y)
+            point = list(config.get_ee2())
+            # print(point)
+            p = Node(point[0], point[1], total + self.num_grapples + 2, angles)
+            '''
             p = Node(np.random.uniform(self.x_min, self.x_max, 1)[0],
 
                      np.random.uniform(self.y_min, self.y_max, 1)[0],
 
-                     total + self.num_grapples + 2)
-
-            # if (not self.intersectsObs(p.point, p.point, obsVec) and self.isWithinWorld(p.point)):
+                     total + self.num_grapples + 2, angles)
+            '''
             # print(p.point)
-            if not in_obstacle(self.obstacle, p):
+            if not in_obstacle(self.obstacle, p) and self.inside_world(p):
                 self.nodes.append(p)
 
             # Indent line below to ensure N points generated
             total += 1
         # print(total)
-        # print(len(self.nodes))
+        print('succesful no. nodes: ', len(self.nodes))
+
+    def inside_world(self, node):
+        """ Check if node point is inside the boundary conditions
+            :param node: A node class object
+        """
+        # print('x max =', self.x_max, 'x_min = ', self.x_min)
+        if (self.x_min <= node.x <= self.x_max) and (self.y_min <= node.y <= self.y_max):
+            return True
+        else:
+            return False
 
     def get_k_neighbours(self):
         """ Pair q (every sample point) to k nearest neighbours (q') """
@@ -293,13 +356,12 @@ class PRM:
         # print('NEIGHBOURS', i.neighbours[0].point)
 
     def obstacle_collision(self, node1, node2, obstacles):
-        """ Check the line segment between two nodes and check if it collides with any four segments that make up a rectangle obstacl
+        """ Check the line segment between two nodes and check if it collides with any four segments that make up a rectangle obstacle
             :param node1: A node point containing x and y coordinate
             :param node2: A node point containing x and y coordinate
             :param obstacles: A list of obstacle class objects
             e.g obstacles[0].edges [((0.2, 0.0), (0.2, 0.095)), ((0.2, 0.095), (1.0, 0.095)), ((1.0, 0.095), (1.0, 0.0)), ((1.0, 0.0), (0.2, 0.0))]
         """
-
         # Check line collisions
         for i in range(len(obstacles)):
             for j in range(len(obstacles[i].edges)):
@@ -308,74 +370,86 @@ class PRM:
 
         return False
 
+    def done(self, current_node, initial_node):
 
-class GraphNode:
-    """
-    Class representing a node in the state graph. You should create an instance of this class each time you generate
-    a sample.
-    """
+        """ The purpose of this function  is: Trace back this node to the founding granpa.
 
-    def __init__(self, spec, config):
+        Print out the states through out
+
         """
-        Create a new graph node object for the given config.
 
-        Neighbors should be added by appending to self.neighbors after creating each new GraphNode.
+        founding_father = current_node
+
+        visited_nodes = []  # the retraced states will be stored here.
+
+        counter = 0
+
+        limit = 50  # if the trace is longer than 50, don't print anything, it will be a mess.
+        # print('doen init', initial_node.configuration)
+        while founding_father:# != initial_node:
+            visited_nodes.append(founding_father)
+
+            founding_father = founding_father.parent
+
+            counter += 1
+            if counter > 100:
+                break
+            # Keep doing this until you reach the founding father that has a parent None (see default of init method)
+
+        print('Number of nodes traveled to the goal = ', counter - 1)
+
+        return visited_nodes
+
+    def solve(self):
+        """
+        Solve method containing code to perform a breadth first search of the state graph and return a list of
+        configs which form a path through the state graph between the initial and the goal. Note that this path will not
+        satisfy the primitive step requirement - you will need to interpolate between the configs in the returned list.
+
 
         :param spec: ProblemSpec object
-        :param config: the RobotConfig object to be stored in this node
+        :return: List of configs forming a path through the graph from initial to goal
         """
-        self.spec = spec
-        self.config = config
-        self.neighbors = []
+        # Set initial and goal nodes
+        init_node = self.nodes[1]
+        goal_node = self.nodes[0]
+        # print("Initial goal node", goal_node.configuration)
 
-    def __eq__(self, other):
-        return test_config_equality(self.config, other.config, self.spec)
+        # search the graph
+        init_container = [init_node]
 
-    def __hash__(self):
-        return hash(tuple(self.config.points))
+        # here, each key is a graph node, each value is the list of configs visited on the path to the graph node
+        init_visited = [init_node.configuration]
 
-    def get_successors(self):
-        return self.neighbors
+        while len(init_container) > 0:
+            current = init_container.pop(0)
+
+            if current.configuration == goal_node.configuration:
+                # found path to goal
+                init_visited.append(current.configuration)
+                print('found a path to: ', init_visited[-1])
+                print('current: ', current.configuration)
+                print('init', init_node.configuration)
+                print('goal: ', goal_node.configuration)
+                print('parent', current.parent.configuration)
+                list = self.done(current, init_node)
+                return list
+
+            successors = current.get_successors()
+            print('current', current.configuration)
+            for suc in successors:
+
+                print('a',suc.configuration, suc.configuration not in init_visited, suc.configuration == goal_node.configuration)
+                if suc.configuration not in init_visited:
+                    suc.parent = current
+                    suc.configuration[-1] = current
+                    init_container.append(suc)
+                    init_visited.append(current.configuration)
+        print('failed to find a path from solve function')
 
 
-def solve(spec):
-    """
-    Solve method containing code to perform a breadth first search of the state graph and return a list of
-    configs which form a path through the state graph between the initial and the goal. Note that this path will not
-    satisfy the primitive step requirement - you will need to interpolate between the configs in the returned list.
-
-
-    :param spec: ProblemSpec object
-    :return: List of configs forming a path through the graph from initial to goal
-    """
-
-    init_node = GraphNode(spec, spec.initial)
-    goal_node = GraphNode(spec, spec.goal)
-
-    # TODO: Insert your code to build the state graph here
-    # *** example for adding neighbors ***
-    # if path between n1 and n2 is collision free:
-    #   n1.neighbors.append(n2)
-    #   n2.neighbors.append(n1)
-
-    # search the graph
-    init_container = [init_node]
-
-    # here, each key is a graph node, each value is the list of configs visited on the path to the graph node
-    init_visited = {init_node: [init_node.config]}
-
-    while len(init_container) > 0:
-        current = init_container.pop(0)
-
-        if test_config_equality(current.config, spec.goal, spec):
-            # found path to goal
-            return init_visited[current]
-
-        successors = current.get_successors()
-        for suc in successors:
-            if suc not in init_visited:
-                init_container.append(suc)
-                init_visited[suc] = init_visited[current] + [suc.config]
+def in_degrees(radians):
+    return radians * 180 / math.pi
 
 
 def main():
@@ -396,9 +470,11 @@ def main():
     # print(problem_spec.obstacles[0].corners[0][0])
     # print('bc', bottom_left_corner[0][0])
 
-    # Create a PRM with X min, X max, Y min, X max, N samples, Obstacles, Grapple points, EE2 goal_x, EE2_goal_y, EE2_initial_x, EE2_initial_y
-    prm = PRM(0, 1, 0, 1, 100, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
-              problem_spec.goal.get_ee2()[1], problem_spec.initial.get_ee2()[0], problem_spec.initial.get_ee2()[1])
+    # Create a PRM with X min, X max, Y min, X max, N samples, Obstacles, Grapple points, EE2 goal_x, EE2_goal_y, EE2_initial_x, EE2_initial_y, min_lengths, max_lengths, initial_ee1
+    prm = PRM(1, 0, 1, 0, 10, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
+              problem_spec.goal.get_ee2()[1], problem_spec.initial.get_ee2()[0], problem_spec.initial.get_ee2()[1],
+              problem_spec.min_lengths, problem_spec.max_lengths, problem_spec.initial.get_ee1(),
+              problem_spec.goal_angles, problem_spec.initial_angles)
     # print(problem_spec.obstacles)
     # print('goal', problem_spec.goal_x)
     # Generate random points for the prm
@@ -406,6 +482,9 @@ def main():
     # Get k neighbours for the random points
     prm.get_k_neighbours()
     # print('obs', in_obstacle(problem_spec.obstacles[0],(0.3,0.2)))
+    list = prm.solve()
+    for i in range(len(list)):
+        print(list[i].configuration)
     k = 0
     x = []
     y = []
@@ -422,6 +501,14 @@ def main():
     print('Goal EE1', problem_spec.goal.get_ee1())
     print('Goal EE2', problem_spec.goal.get_ee2())
     print('Obstacles', problem_spec.obstacles[0].edges[0][0])
+    print('lengths', problem_spec.min_lengths, problem_spec.max_lengths)
+    test = robot_config.make_robot_config_from_ee1(lengths=[0.2, 0.2, 0.2], angles=[30, 30, 30],
+                                                   x=problem_spec.initial.get_ee1()[0],
+                                                   y=problem_spec.initial.get_ee1()[0])
+    # print('Configuration: ', prm.nodes[9].configuration)
+    print('Configuration goal: ', prm.nodes[0].configuration)
+    # print('goal angles prm', problem_spec.goal_angles)
+
     # p1 = [0, 0]
     # p2 = [2, 2]
     # dist = math.sqrt( (p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 )
@@ -451,11 +538,17 @@ def main():
     plt.scatter(problem_spec.initial.get_ee2()[0], problem_spec.initial.get_ee2()[1], color='black', s=100)
     # plt.scatter(bottom_left_corner[0], bottom_left_corner[1], color='red', s=3000)
     # print(x_length)
+    ''' Plot the potential paths between nodes'''
     for i in range(len(prm.nodes)):
         for j in range(len(prm.nodes[i].neighbours)):
             # print('SCATTER', prm.nodes[i].neighbours[j])
             plt.plot([prm.nodes[i].x, prm.nodes[i].neighbours[j].x], [prm.nodes[i].y, prm.nodes[i].neighbours[j].y],
                      'y-')
+    for i in range(len(list)-1):
+        plt.plot([list[i].x, list[i+1].x], [list[i].y, list[i+1].y],
+                 'r-', zorder = 3)
+        counter = i
+    # print(i)
     # plt.plot([x1, x2], [y1, y2], 'k-')
     plt.title(testcase)
     plt.xlabel('X coordinates')
