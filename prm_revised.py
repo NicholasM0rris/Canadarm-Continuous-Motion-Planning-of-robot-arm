@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -209,7 +211,7 @@ def line_segment_collision(node1, node2, obstacle_corner1, obstacle_corner2):
 
 class Node:
 
-    def __init__(self, x, y, node_id, angle, parent=None):
+    def __init__(self, x, y, node_id, angle):
         self.point = (x, y)
         self.x = x
         self.y = y
@@ -219,8 +221,8 @@ class Node:
         self.configuration = [x, y]
         self.configuration.extend(angle)
 
-        self.parent = parent
-        self.configuration.append(self.parent)
+        #self.parent = parent
+        #self.configuration.append(self.parent)
 
     def get_successors(self):
         """ Returns a nodes neighbours
@@ -419,32 +421,32 @@ class PRM:
         init_container = [init_node]
 
         # here, each key is a graph node, each value is the list of configs visited on the path to the graph node
-        init_visited = [init_node.configuration]
-
+        # init_visited = [init_node.configuration]
+        init_visited = {init_node: [init_node.configuration]}
         while len(init_container) > 0:
-            current = init_container.pop(0)
 
+            current = init_container.pop(0)
+            # current_copy = deepcopy(current)
             if current.configuration == goal_node.configuration:
                 # found path to goal
-                init_visited.append(current.configuration)
-                print('found a path to: ', init_visited[-1])
+                #print('found a path to: ', init_visited[-1])
                 print('current: ', current.configuration)
                 print('init', init_node.configuration)
                 print('goal: ', goal_node.configuration)
-                print('parent', current.parent.configuration)
-                list = self.done(current, init_node)
-                return list
+                # print('parent', current.parent.configuration)
+                # list = self.done(current, init_node)
+                return init_visited[current]
 
             successors = current.get_successors()
             print('current', current.configuration)
             for suc in successors:
 
-                print('a',suc.configuration, suc.configuration not in init_visited, suc.configuration == goal_node.configuration)
-                if suc.configuration not in init_visited:
-                    suc.parent = current
-                    suc.configuration[-1] = current
+                # print('a', suc.configuration, suc.configuration not in init_visited, suc.configuration == goal_node.configuration)
+                if suc not in init_visited:
+                    # suc.parent = current
+                    # suc.configuration[-1] = current
                     init_container.append(suc)
-                    init_visited.append(current.configuration)
+                    init_visited[suc] = init_visited[current] + [suc.configuration]
         print('failed to find a path from solve function')
 
 
@@ -471,7 +473,7 @@ def main():
     # print('bc', bottom_left_corner[0][0])
 
     # Create a PRM with X min, X max, Y min, X max, N samples, Obstacles, Grapple points, EE2 goal_x, EE2_goal_y, EE2_initial_x, EE2_initial_y, min_lengths, max_lengths, initial_ee1
-    prm = PRM(1, 0, 1, 0, 10, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
+    prm = PRM(1, 0, 1, 0, 50, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
               problem_spec.goal.get_ee2()[1], problem_spec.initial.get_ee2()[0], problem_spec.initial.get_ee2()[1],
               problem_spec.min_lengths, problem_spec.max_lengths, problem_spec.initial.get_ee1(),
               problem_spec.goal_angles, problem_spec.initial_angles)
@@ -483,8 +485,11 @@ def main():
     prm.get_k_neighbours()
     # print('obs', in_obstacle(problem_spec.obstacles[0],(0.3,0.2)))
     list = prm.solve()
+    print('configs to goal', list)
+    '''
     for i in range(len(list)):
         print(list[i].configuration)
+    '''
     k = 0
     x = []
     y = []
@@ -544,10 +549,13 @@ def main():
             # print('SCATTER', prm.nodes[i].neighbours[j])
             plt.plot([prm.nodes[i].x, prm.nodes[i].neighbours[j].x], [prm.nodes[i].y, prm.nodes[i].neighbours[j].y],
                      'y-')
+    # Plot the correct path
+
     for i in range(len(list)-1):
-        plt.plot([list[i].x, list[i+1].x], [list[i].y, list[i+1].y],
+        plt.plot([list[i][0], list[i+1][0]], [list[i][1], list[i+1][1]],
                  'r-', zorder = 3)
         counter = i
+
     # print(i)
     # plt.plot([x1, x2], [y1, y2], 'k-')
     plt.title(testcase)
