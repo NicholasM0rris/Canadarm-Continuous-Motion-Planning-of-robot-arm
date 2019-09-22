@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import math
 import time
-from tester import test_config_equality
+from tester import test_config_equality, test_bounding_box, test_line_collision
 
 import sys
 import robot_config
@@ -209,6 +209,23 @@ def line_segment_collision(node1, node2, obstacle_corner1, obstacle_corner2):
     return False
 
 
+def test_obstacle_collision(config, spec, obstacles):
+    # return true for pass, false for fail
+    for i in range(spec.num_segments):
+        p = config.points[i]
+        q = config.points[i+1]
+        for o in obstacles:
+            # bounding box check
+            if not test_bounding_box(p, q, (o.x1, o.y1), (o.x2, o.y2)):
+                continue
+
+            # full edge check
+            for e in o.edges:
+                if test_line_collision((p, q), e):
+                    # collision between robot segment and obstacle edge
+                    return False
+    return True
+
 class Node:
 
     def __init__(self, x, y, node_id, angle):
@@ -234,7 +251,7 @@ class Node:
 class PRM:
 
     def __init__(self, x_max, x_min, y_max, y_min, N, obstacle, grapple_points, goal_x, goal_y, initial_x, initial_y,
-                 min_lengths, max_lengths, initial_ee1, goal_angles, initial_angles):
+                 min_lengths, max_lengths, initial_ee1, goal_angles, initial_angles, spec):
         self.x_max = x_max
 
         self.y_max = y_max
@@ -271,6 +288,8 @@ class PRM:
 
         self.goal = [goal_x, goal_y]
 
+        self.spec = spec
+
         """ Add the goal as a node - Always has ID of 0 """
         self.nodes.append(Node(goal_x, goal_y, 0, self.goal_angles))
         # print(goal_x, goal_y, self.goal_angles)
@@ -296,7 +315,7 @@ class PRM:
 
         while total < self.num_nodes:
 
-            angles = np.random.uniform(15, 165, self.num_links)
+            angles = np.random.uniform(0, 180, self.num_links)
 
             # print(angles)
             # print(self.initial_x)
@@ -315,8 +334,9 @@ class PRM:
                      total + self.num_grapples + 2, angles)
             '''
             # print(p.point)
-            if not in_obstacle(self.obstacle, p) and self.inside_world(p):
+            if not in_obstacle(self.obstacle, p) and self.inside_world(p) and test_obstacle_collision(config, self.spec, self.obstacle):
                 self.nodes.append(p)
+                print(p.configuration)
 
             # Indent line below to ensure N points generated
             total += 1
@@ -441,13 +461,13 @@ class PRM:
             print('current', current.configuration)
             for suc in successors:
 
-                # print('a', suc.configuration, suc.configuration not in init_visited, suc.configuration == goal_node.configuration)
+                print('a', suc.configuration, suc not in init_visited, suc.configuration == goal_node.configuration)
                 if suc not in init_visited:
-                    # suc.parent = current
-                    # suc.configuration[-1] = current
+                    #suc.parent = current
+                    #suc.configuration[-1] = current
                     init_container.append(suc)
                     init_visited[suc] = init_visited[current] + [suc.configuration]
-        print('failed to find a path from solve function')
+        print('failed to find a path from solve function', init_container)
 
 
 def in_degrees(radians):
@@ -457,7 +477,7 @@ def in_degrees(radians):
 def main():
     start = time.time()
     # print(np.random.uniform(0, 100, size=10))
-    testcase = 'testcases/3g1_m0.txt'
+    testcase = 'testcases/3g1_m2.txt'
     problem_spec = ProblemSpec(testcase)
     # print(problem_spec.obstacles[0].corners)
     bottom_left_corner = []
@@ -473,10 +493,10 @@ def main():
     # print('bc', bottom_left_corner[0][0])
 
     # Create a PRM with X min, X max, Y min, X max, N samples, Obstacles, Grapple points, EE2 goal_x, EE2_goal_y, EE2_initial_x, EE2_initial_y, min_lengths, max_lengths, initial_ee1
-    prm = PRM(1, 0, 1, 0, 50, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
+    prm = PRM(1, 0, 1, 0, 200, problem_spec.obstacles, problem_spec.grapple_points, problem_spec.goal.get_ee2()[0],
               problem_spec.goal.get_ee2()[1], problem_spec.initial.get_ee2()[0], problem_spec.initial.get_ee2()[1],
               problem_spec.min_lengths, problem_spec.max_lengths, problem_spec.initial.get_ee1(),
-              problem_spec.goal_angles, problem_spec.initial_angles)
+              problem_spec.goal_angles, problem_spec.initial_angles, problem_spec)
     # print(problem_spec.obstacles)
     # print('goal', problem_spec.goal_x)
     # Generate random points for the prm
@@ -550,12 +570,13 @@ def main():
             plt.plot([prm.nodes[i].x, prm.nodes[i].neighbours[j].x], [prm.nodes[i].y, prm.nodes[i].neighbours[j].y],
                      'y-')
     # Plot the correct path
-
-    for i in range(len(list)-1):
-        plt.plot([list[i][0], list[i+1][0]], [list[i][1], list[i+1][1]],
-                 'r-', zorder = 3)
-        counter = i
-
+    try:
+        for i in range(len(list)-1):
+            plt.plot([list[i][0], list[i+1][0]], [list[i][1], list[i+1][1]],
+                     'r-', zorder = 3)
+            counter = i
+    except:
+        pass
     # print(i)
     # plt.plot([x1, x2], [y1, y2], 'k-')
     plt.title(testcase)
