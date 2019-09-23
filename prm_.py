@@ -22,6 +22,7 @@ http://www.cs.columbia.edu/~allen/F15/NOTES/Probabilisticpath.pdf
 # TODO Change to command line argument
 FORCE = None
 
+
 class Obstacle:
     """
     Class representing a rectangular obstacle.
@@ -233,7 +234,7 @@ def test_obstacle_collision(config, spec, obstacles):
 
 class Node:
 
-    def __init__(self, x, y, node_id, angle, length=None):
+    def __init__(self, x, y, node_id, angle, x2=None, y2=None, length=None):
         self.point = (x, y)
         self.x = x
         self.y = y
@@ -242,9 +243,20 @@ class Node:
         self.neighbours = []
         self.angles = angle
         self.configuration = [x, y]
-        self.configuration.extend(angle)
+        try:
+            self.configuration.extend(angle)
+        except TypeError:
+            pass
         try:
             self.configuration.extend(length)
+        except TypeError:
+            pass
+        try:
+            # print(x2, y2)
+            if x2 and y2 is not None:
+                self.grappled_point = [x2, y2]
+                self.configuration.extend(self.grappled_point)
+                # print('yes')
         except TypeError:
             pass
 
@@ -276,6 +288,10 @@ class PRM:
 
         self.obstacle = obstacle
 
+        self.current_grapple = list(grapple_points[0])
+
+        self.goal_grapple = [spec.goal_x, spec.goal_y]
+
         self.goal_length = spec.goal.lengths
 
         self.goal_angles = goal_angles
@@ -305,15 +321,19 @@ class PRM:
         self.spec = spec
 
         """ Add the goal as a node - Always has ID of 0 """
-        self.nodes.append(Node(goal_x, goal_y, 0, self.goal_angles, self.goal_length))
+        self.nodes.append(Node(goal_x, goal_y, 0, self.goal_angles, x2=self.goal_grapple[0], y2=self.goal_grapple[1],
+                               length=self.goal_length))
+
         # print(goal_x, goal_y, self.goal_angles)
         print('goal node', self.nodes[0].configuration)
 
         """ Add initial EE2 as node - Always had ID of 1 """
-        self.nodes.append(Node(initial_x, initial_y, 1, self.initial_angles, self.initial_length))
+        self.nodes.append(Node(initial_x, initial_y, 1, self.initial_angles, self.initial_ee1_x, self.initial_ee1_y,
+                               self.initial_length))
 
         ''' Add grapple points as nodes - ID always 1 - num. grapple pts '''
         for i in range(len(grapple_points) - 1):
+            print(grapple_points[i + 1])
             self.nodes.append(Node(grapple_points[i + 1][0], grapple_points[i + 1][1], i + 2, 1))
 
         # print(self.nodes[0])
@@ -329,7 +349,7 @@ class PRM:
 
         while total < self.num_nodes:
 
-            angles = np.random.uniform(0, 180, self.num_links)
+            angles = np.random.uniform(-90, 90, self.num_links)
             lengths = np.random.uniform(self.min_lengths, self.max_lengths, self.num_links)
 
             # print(angles)
@@ -340,7 +360,8 @@ class PRM:
             # print(self.initial_ee1_x, self.initial_ee1_y)
             point = list(config.get_ee2())
             # print(point)
-            p = Node(point[0], point[1], total + self.num_grapples + 2, angles, lengths)
+            p = Node(point[0], point[1], total + self.num_grapples + 2, angles, self.current_grapple[0],
+                     self.current_grapple[1], lengths)
             '''
             p = Node(np.random.uniform(self.x_min, self.x_max, 1)[0],
 
@@ -455,8 +476,13 @@ class PRM:
         :return: List of configs forming a path through the graph from initial to goal
         """
         # Set initial and goal nodes
-        init_node = self.nodes[1]
-        goal_node = self.nodes[0]
+        if self.current_grapple == self.goal_grapple:
+            init_node = self.nodes[1]
+            goal_node = self.nodes[0]
+        else:
+            init_node = self.nodes[1]
+            # Set the goal node to be another grapple node
+            goal_node = self.nodes[2]
         # print("Initial goal node", goal_node.configuration)
 
         # search the graph
@@ -472,6 +498,7 @@ class PRM:
             if current.configuration == goal_node.configuration:
                 # found path to goal
                 # print('found a path to: ', init_visited[-1])
+
                 print('current: ', current.configuration)
                 print('init', init_node.configuration)
                 print('goal: ', goal_node.configuration)
@@ -492,8 +519,57 @@ class PRM:
         print('failed to find a path from solve function', init_container)
 
 
+def interpolate(robot_configuration, num_links):
+    new_robot_config_list = []
+    robot_config = []
+    copy_robot_config = robot_configuration
+    for i in range(len(copy_robot_config)):
+        # Remove coord points for now
+        print(type(robot_config))
+        robot_config.append(copy_robot_config[i][2:-2])
+        # Convert the angles to radians
+        for j in range(num_links):
+            print('here', robot_config[i])
+
+            robot_config[i][j] = in_radians(robot_config[i][j])
+    for i in range(len(robot_config) - 1):
+
+        c1 = np.array(robot_config[i])
+        c2 = np.array(robot_config[i + 1])
+        diff = c2 - c1
+        print('c1',c1)
+        print('diff', diff)
+        n_steps = abs(diff / 0.001)
+        print('steps', n_steps)
+        delta = diff / n_steps
+        print('delta', delta)
+        # Remove nans and replace for 0
+        delta[np.isnan(delta)] = 0
+        print('new delta', delta)
+        for j in range(len(n_steps)):
+            ci = c1 + (j * delta)
+            ci = list(ci)
+            # Convert back to degrees
+            for k in range(num_links):
+                ci[k] = in_degrees(robot_config[i][k])
+            #ci.insert(0, robot_configuration[i][1])
+            #ci.insert(0, robot_configuration[i][0])
+            ci.append(robot_configuration[i][-2])
+            ci.append(robot_configuration[i][-1])
+
+            new_robot_config_list.append(ci)
+
+    # print(new_robot_config_list) <- DO NOT Uncomment           Unless you want a BAD TIME... IT'S HUGE
+    print(len(new_robot_config_list))
+    return new_robot_config_list
+
+
 def in_degrees(radians):
     return radians * 180 / math.pi
+
+
+def in_radians(degrees):
+    return degrees * math.pi / 180
 
 
 def write_robot_config_list_to_file(filename, robot_config_list, num_links):
@@ -508,26 +584,39 @@ def write_robot_config_list_to_file(filename, robot_config_list, num_links):
     f = open(filename, 'w')
     j = 0
     for rc in range(len(robot_config_list)):
-
+        print(robot_config_list)
         lengths = []
         angles = []
         # Create robot config to get EE1 positions
         for i in range(num_links):
-            lengths.append(robot_config_list[rc][i + 2 + num_links])
-            angles.append(robot_config_list[rc][i + 2])
+            lengths.append(robot_config_list[rc][i + num_links])
+            angles.append(robot_config_list[rc][i])
+        '''
         config = robot_config.make_robot_config_from_ee2(lengths=lengths, angles=angles,
                                                          x=robot_config_list[rc][0],
                                                          y=robot_config_list[rc][0])
         ee1 = list(config.get_ee1())
+        '''
+        ee1 = [robot_config_list[rc][-2], robot_config_list[rc][-1]]
+        # print(ee1)
+        ee1 = str(ee1).replace(",", "")
+        angles = str(angles).replace(",", "")
+        lengths = str(lengths).replace(",", "")
+        print('lengths', lengths)
+        print('angles', angles)
+
+
         f.write("{0}; {1}; {2}\n".format(str(ee1)[1:-1], str(angles)[1:-1], str(lengths)[1:-1]))
+
     f.close()
 
 
 def main():
     start = time.time()
     # print(np.random.uniform(0, 100, size=10))
-    testcase = 'testcases/4g1_m1.txt'
+    testcase = 'testcases/3g1_m1.txt'
     problem_spec = ProblemSpec(testcase)
+
     # print(problem_spec.obstacles[0].corners)
     bottom_left_corner = []
     x_length = []
@@ -554,11 +643,12 @@ def main():
     # Get k neighbours for the random points
     prm.get_k_neighbours()
     # print('obs', in_obstacle(problem_spec.obstacles[0],(0.3,0.2)))
-    list = prm.solve()
-    print('configs to goal', list)
+    path = prm.solve()
+    print('configs to goal', path)
+    new_path = interpolate(path, problem_spec.num_segments)
     # We need to write a list of primitive steps, extrapolating between the configurations
     # EE1x, EE1y; angle1, angle2 ... anglen; length1, length 2 ... length 3
-    write_robot_config_list_to_file('output.txt', list, problem_spec.num_segments)
+    write_robot_config_list_to_file('output.txt', new_path, problem_spec.num_segments)
     '''
     for i in range(len(list)):
         print(list[i].configuration)
@@ -624,8 +714,8 @@ def main():
                      'y-')
     # Plot the correct path
     try:
-        for i in range(len(list) - 1):
-            plt.plot([list[i][0], list[i + 1][0]], [list[i][1], list[i + 1][1]],
+        for i in range(len(path) - 1):
+            plt.plot([path[i][0], path[i + 1][0]], [path[i][1], path[i + 1][1]],
                      'r-', zorder=3)
             counter = i
     except:
@@ -637,6 +727,7 @@ def main():
     plt.ylabel('Y coordinates')
     print('Time required = ', -start + time.time())
     plt.show()
+
 
 # TODO Add arguments "input_file" "option for force" "Num_nodes" "K neighbours input" "output_file"
 if __name__ == '__main__':
