@@ -150,6 +150,7 @@ class ProblemSpec:
         for i in range(len(initial_angles)):
             self.initial_angles.append(in_degrees(initial_angles[i].radians))
 
+
 def next_valid_line(f):
     # skip comments and empty lines, return None on EOF
     while True:
@@ -213,7 +214,7 @@ def test_obstacle_collision(config, spec, obstacles):
     # return true for pass, false for fail
     for i in range(spec.num_segments):
         p = config.points[i]
-        q = config.points[i+1]
+        q = config.points[i + 1]
         for o in obstacles:
             # bounding box check
             if not test_bounding_box(p, q, (o.x1, o.y1), (o.x2, o.y2)):
@@ -226,20 +227,26 @@ def test_obstacle_collision(config, spec, obstacles):
                     return False
     return True
 
+
 class Node:
 
-    def __init__(self, x, y, node_id, angle):
+    def __init__(self, x, y, node_id, angle, length=None):
         self.point = (x, y)
         self.x = x
         self.y = y
+        self.length = length
         self.node_id = node_id
         self.neighbours = []
         self.angles = angle
         self.configuration = [x, y]
         self.configuration.extend(angle)
+        try:
+            self.configuration.extend(length)
+        except TypeError:
+            pass
 
-        #self.parent = parent
-        #self.configuration.append(self.parent)
+        # self.parent = parent
+        # self.configuration.append(self.parent)
 
     def get_successors(self):
         """ Returns a nodes neighbours
@@ -266,6 +273,8 @@ class PRM:
 
         self.obstacle = obstacle
 
+        self.goal_length = spec.goal.lengths
+
         self.goal_angles = goal_angles
 
         self.initial_angles = initial_angles
@@ -273,6 +282,8 @@ class PRM:
         self.initial_ee1_x = initial_ee1[0]
 
         self.initial_ee1_y = initial_ee1[1]
+
+        self.initial_length = spec.initial.lengths
 
         self.grapple = grapple_points
 
@@ -291,16 +302,16 @@ class PRM:
         self.spec = spec
 
         """ Add the goal as a node - Always has ID of 0 """
-        self.nodes.append(Node(goal_x, goal_y, 0, self.goal_angles))
+        self.nodes.append(Node(goal_x, goal_y, 0, self.goal_angles, self.goal_length))
         # print(goal_x, goal_y, self.goal_angles)
         print('goal node', self.nodes[0].configuration)
 
         """ Add initial EE2 as node - Always had ID of 1 """
-        self.nodes.append(Node(initial_x, initial_y, 1, self.initial_angles))
+        self.nodes.append(Node(initial_x, initial_y, 1, self.initial_angles, self.initial_length))
 
         ''' Add grapple points as nodes - ID always 1 - num. grapple pts '''
-        for i in range(len(grapple_points)-1):
-            self.nodes.append(Node(grapple_points[i+1][0], grapple_points[i+1][1], i + 2, 1))
+        for i in range(len(grapple_points) - 1):
+            self.nodes.append(Node(grapple_points[i + 1][0], grapple_points[i + 1][1], i + 2, 1))
 
         # print(self.nodes[0])
 
@@ -316,16 +327,17 @@ class PRM:
         while total < self.num_nodes:
 
             angles = np.random.uniform(0, 180, self.num_links)
+            lengths = np.random.uniform(self.min_lengths, self.max_lengths, self.num_links)
 
             # print(angles)
             # print(self.initial_x)
-            config = robot_config.make_robot_config_from_ee1(lengths=self.min_lengths, angles=angles,
+            config = robot_config.make_robot_config_from_ee1(lengths=lengths, angles=angles,
                                                              x=self.initial_ee1_x,
                                                              y=self.initial_ee1_y)
             # print(self.initial_ee1_x, self.initial_ee1_y)
             point = list(config.get_ee2())
             # print(point)
-            p = Node(point[0], point[1], total + self.num_grapples + 2, angles)
+            p = Node(point[0], point[1], total + self.num_grapples + 2, angles, lengths)
             '''
             p = Node(np.random.uniform(self.x_min, self.x_max, 1)[0],
 
@@ -334,7 +346,8 @@ class PRM:
                      total + self.num_grapples + 2, angles)
             '''
             # print(p.point)
-            if not in_obstacle(self.obstacle, p) and self.inside_world(p) and test_obstacle_collision(config, self.spec, self.obstacle):
+            if not in_obstacle(self.obstacle, p) and self.inside_world(p) and test_obstacle_collision(config, self.spec,
+                                                                                                      self.obstacle):
                 self.nodes.append(p)
                 print(p.configuration)
 
@@ -356,7 +369,7 @@ class PRM:
     def get_k_neighbours(self):
         """ Pair q (every sample point) to k nearest neighbours (q') """
         # Define number of neighbours k here
-        k_max = 10
+        k_max = 20
         # For every node point get the edge distances that don't intersect obstacles
         for i in self.nodes:
             distances = []
@@ -408,7 +421,7 @@ class PRM:
 
         limit = 50  # if the trace is longer than 50, don't print anything, it will be a mess.
         # print('doen init', initial_node.configuration)
-        while founding_father:# != initial_node:
+        while founding_father:  # != initial_node:
             visited_nodes.append(founding_father)
 
             founding_father = founding_father.parent
@@ -449,7 +462,7 @@ class PRM:
             # current_copy = deepcopy(current)
             if current.configuration == goal_node.configuration:
                 # found path to goal
-                #print('found a path to: ', init_visited[-1])
+                # print('found a path to: ', init_visited[-1])
                 print('current: ', current.configuration)
                 print('init', init_node.configuration)
                 print('goal: ', goal_node.configuration)
@@ -461,10 +474,10 @@ class PRM:
             print('current', current.configuration)
             for suc in successors:
 
-                print('a', suc.configuration, suc not in init_visited, suc.configuration == goal_node.configuration)
+                # print('a', suc.configuration, suc not in init_visited, suc.configuration == goal_node.configuration)
                 if suc not in init_visited:
-                    #suc.parent = current
-                    #suc.configuration[-1] = current
+                    # suc.parent = current
+                    # suc.configuration[-1] = current
                     init_container.append(suc)
                     init_visited[suc] = init_visited[current] + [suc.configuration]
         print('failed to find a path from solve function', init_container)
@@ -474,10 +487,37 @@ def in_degrees(radians):
     return radians * 180 / math.pi
 
 
+def write_robot_config_list_to_file(filename, robot_config_list, num_links):
+    """
+    Write an output file for the given list of RobotConfigs. We recommend using this method to generate your output
+    file.
+    :param filename: name of output file (e.g. 2nd argument given to program)
+    :param robot_config_list: list of RobotConfig objects forming a path
+    :param num_links: The number of links for the robot arm
+    """
+
+    f = open(filename, 'w')
+    j = 0
+    for rc in range(len(robot_config_list)):
+
+        lengths = []
+        angles = []
+        # Create robot config to get EE1 positions
+        for i in range(num_links):
+            lengths.append(robot_config_list[rc][-i])
+            angles.append(robot_config_list[rc][i + 2])
+        config = robot_config.make_robot_config_from_ee2(lengths=lengths, angles=angles,
+                                                         x=robot_config_list[rc][0],
+                                                         y=robot_config_list[rc][0])
+        ee1 = list(config.get_ee1())
+        f.write("{0}; {1}; {2}\n".format(str(ee1)[1:-1], str(angles)[1:-1], str(lengths)[1:-1]))
+    f.close()
+
+
 def main():
     start = time.time()
     # print(np.random.uniform(0, 100, size=10))
-    testcase = 'testcases/3g1_m2.txt'
+    testcase = 'testcases/4g1_m1.txt'
     problem_spec = ProblemSpec(testcase)
     # print(problem_spec.obstacles[0].corners)
     bottom_left_corner = []
@@ -498,6 +538,7 @@ def main():
               problem_spec.min_lengths, problem_spec.max_lengths, problem_spec.initial.get_ee1(),
               problem_spec.goal_angles, problem_spec.initial_angles, problem_spec)
     # print(problem_spec.obstacles)
+
     # print('goal', problem_spec.goal_x)
     # Generate random points for the prm
     prm.generate_random_points()
@@ -506,6 +547,9 @@ def main():
     # print('obs', in_obstacle(problem_spec.obstacles[0],(0.3,0.2)))
     list = prm.solve()
     print('configs to goal', list)
+    # We need to write a list of primitive steps, extrapolating between the configurations
+    # EE1x, EE1y; angle1, angle2 ... anglen; length1, length 2 ... length 3
+    write_robot_config_list_to_file('output.txt', list, problem_spec.num_segments)
     '''
     for i in range(len(list)):
         print(list[i].configuration)
@@ -571,9 +615,9 @@ def main():
                      'y-')
     # Plot the correct path
     try:
-        for i in range(len(list)-1):
-            plt.plot([list[i][0], list[i+1][0]], [list[i][1], list[i+1][1]],
-                     'r-', zorder = 3)
+        for i in range(len(list) - 1):
+            plt.plot([list[i][0], list[i + 1][0]], [list[i][1], list[i + 1][1]],
+                     'r-', zorder=3)
             counter = i
     except:
         pass
