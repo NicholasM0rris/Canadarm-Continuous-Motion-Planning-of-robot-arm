@@ -6,7 +6,7 @@ import matplotlib.patches as patches
 import math
 import time
 from tester import test_config_equality, test_bounding_box, test_line_collision
-
+import copy
 import sys
 import robot_config
 from robot_config import make_robot_config_from_ee1, make_robot_config_from_ee2
@@ -521,46 +521,71 @@ class PRM:
 
 def interpolate(robot_configuration, num_links):
     new_robot_config_list = []
+
     robot_config = []
     copy_robot_config = robot_configuration
     for i in range(len(copy_robot_config)):
         # Remove coord points for now
-        print(type(robot_config))
+        # print(type(robot_config))
         robot_config.append(copy_robot_config[i][2:-2])
         # Convert the angles to radians
         for j in range(num_links):
-            print('here', robot_config[i])
-
             robot_config[i][j] = in_radians(robot_config[i][j])
+            # print('should be radians', robot_config[i])
+    print('robot_config', robot_config)
+    # For each node
     for i in range(len(robot_config) - 1):
+        # print('len', len(robot_config))
 
         c1 = np.array(robot_config[i])
         c2 = np.array(robot_config[i + 1])
+        # print("c1c2", c1, c2)
         diff = c2 - c1
-        print('c1',c1)
-        print('diff', diff)
+        # print('c1', c1)
+        # print('diff', diff)
         n_steps = abs(diff / 0.001)
-        print('steps', n_steps)
+        # print('steps', n_steps)
         delta = diff / n_steps
-        print('delta', delta)
+        # print('delta', delta)
         # Remove nans and replace for 0
         delta[np.isnan(delta)] = 0
-        print('new delta', delta)
-        for j in range(len(n_steps)):
-            ci = c1 + (j * delta)
-            ci = list(ci)
-            # Convert back to degrees
-            for k in range(num_links):
-                ci[k] = in_degrees(robot_config[i][k])
-            #ci.insert(0, robot_configuration[i][1])
-            #ci.insert(0, robot_configuration[i][0])
+        # print('new delta', delta)
+        n_steps = n_steps.astype(int)
+        # print('rounded', n_steps)
+        ci = copy.deepcopy(c1)
+        # print('c1 here',c1)
+        # Iterate over all angles and lengths
+        # print("links", num_links*2)
+        for k in range(n_steps[j]):
+            for j in range(num_links * 2):
+
+                # print("NUM STEPS!!!!", n_steps[j])
+                ci[j] = c1[j] + (k * delta[j])
+                # print('c1__', c1)
+                # print('c1[j], [k],  delta[j], k*delta[j])', j, c1[j], [k], delta[j], k * delta[j])
+                '''
+                print('j=', j, 'k=', k)
+                print('ci[j]',ci[j])
+                print('delta', delta[j])
+                print('c1', c1[j], 'c2', c2[j])
+                print(c1, c2)
+                print(robot_config[-2], robot_config[-1])
+                '''
+                # Convert back to degrees
+                #for angle in range(num_links):
+                    #ci[angle] = in_degrees(ci[angle])
+                # ci.insert(0, robot_configuration[i][1])
+                # ci.insert(0, robot_configuration[i][0])
+                ci = list(ci)
             ci.append(robot_configuration[i][-2])
             ci.append(robot_configuration[i][-1])
+        # print('new_ci', ci)
 
             new_robot_config_list.append(ci)
 
-    # print(new_robot_config_list) <- DO NOT Uncomment           Unless you want a BAD TIME... IT'S HUGE
+    print(new_robot_config_list[0])  # <- DO NOT Uncomment           Unless you want a BAD TIME... IT'S HUGE
     print(len(new_robot_config_list))
+
     return new_robot_config_list
 
 
@@ -584,13 +609,13 @@ def write_robot_config_list_to_file(filename, robot_config_list, num_links):
     f = open(filename, 'w')
     j = 0
     for rc in range(len(robot_config_list)):
-        print(robot_config_list)
+        #  print(robot_config_list)
         lengths = []
         angles = []
         # Create robot config to get EE1 positions
         for i in range(num_links):
             lengths.append(robot_config_list[rc][i + num_links])
-            angles.append(robot_config_list[rc][i])
+            angles.append(in_degrees(robot_config_list[rc][i]))
         '''
         config = robot_config.make_robot_config_from_ee2(lengths=lengths, angles=angles,
                                                          x=robot_config_list[rc][0],
@@ -602,9 +627,8 @@ def write_robot_config_list_to_file(filename, robot_config_list, num_links):
         ee1 = str(ee1).replace(",", "")
         angles = str(angles).replace(",", "")
         lengths = str(lengths).replace(",", "")
-        print('lengths', lengths)
-        print('angles', angles)
-
+        # print('lengths', lengths)
+        # print('angles', angles)
 
         f.write("{0}; {1}; {2}\n".format(str(ee1)[1:-1], str(angles)[1:-1], str(lengths)[1:-1]))
 
