@@ -12,6 +12,7 @@ import robot_config
 from robot_config import make_robot_config_from_ee1, make_robot_config_from_ee2
 from obstacle import Obstacle
 from angle import Angle
+import random
 
 '''
 Useful link on PRM
@@ -348,11 +349,13 @@ class PRM:
         total = 0
 
         while total < self.num_nodes:
-
-            angles = np.random.uniform(-90, 90, self.num_links)
+            angles = [random.randrange(180)]
+            # print('annnngles', angles, type(angles))
+            angles.extend(list(np.random.uniform(-90, 90, self.num_links-1)))
+            print(angles)
             lengths = np.random.uniform(self.min_lengths, self.max_lengths, self.num_links)
 
-            # print(angles)
+            # print('angles',angles)
             # print(self.initial_x)
             config = robot_config.make_robot_config_from_ee1(lengths=lengths, angles=angles,
                                                              x=self.initial_ee1_x,
@@ -373,7 +376,7 @@ class PRM:
             if not in_obstacle(self.obstacle, p) and self.inside_world(p) and test_obstacle_collision(config, self.spec,
                                                                                                       self.obstacle):
                 self.nodes.append(p)
-                print(p.configuration)
+                # print(p.configuration)
 
             # Indent line below to ensure N points generated
             total += 1
@@ -507,7 +510,7 @@ class PRM:
                 return init_visited[current]
 
             successors = current.get_successors()
-            print('current', current.configuration)
+            # print('current', current.configuration)
             for suc in successors:
 
                 # print('a', suc.configuration, suc not in init_visited, suc.configuration == goal_node.configuration)
@@ -523,7 +526,7 @@ def interpolate(robot_configuration, num_links):
     new_robot_config_list = []
 
     robot_config = []
-    copy_robot_config = robot_configuration
+    copy_robot_config = copy.deepcopy(robot_configuration)
     for i in range(len(copy_robot_config)):
         # Remove coord points for now
         # print(type(robot_config))
@@ -543,47 +546,53 @@ def interpolate(robot_configuration, num_links):
         diff = c2 - c1
         # print('c1', c1)
         # print('diff', diff)
-        n_steps = abs(diff / 0.001)
+        max_diff = max(abs(diff))
+        n_steps = math.ceil(max_diff / 0.001)
         # print('steps', n_steps)
         delta = diff / n_steps
         # print('delta', delta)
         # Remove nans and replace for 0
         delta[np.isnan(delta)] = 0
         # print('new delta', delta)
-        n_steps = n_steps.astype(int)
+        # n_steps = n_steps.astype(int)
         # print('rounded', n_steps)
         ci = copy.deepcopy(c1)
         # print('c1 here',c1)
-        # Iterate over all angles and lengths
-        # print("links", num_links*2)
-        for k in range(n_steps[j]):
-            for j in range(num_links * 2):
 
-                # print("NUM STEPS!!!!", n_steps[j])
-                ci[j] = c1[j] + (k * delta[j])
-                # print('c1__', c1)
-                # print('c1[j], [k],  delta[j], k*delta[j])', j, c1[j], [k], delta[j], k * delta[j])
-                '''
-                print('j=', j, 'k=', k)
-                print('ci[j]',ci[j])
-                print('delta', delta[j])
-                print('c1', c1[j], 'c2', c2[j])
-                print(c1, c2)
-                print(robot_config[-2], robot_config[-1])
-                '''
-                # Convert back to degrees
-                #for angle in range(num_links):
-                    #ci[angle] = in_degrees(ci[angle])
-                # ci.insert(0, robot_configuration[i][1])
-                # ci.insert(0, robot_configuration[i][0])
-                ci = list(ci)
+        # print("links", num_links*2)
+        # Iterate over every step
+        for step_number in range(n_steps):
+            # Iterate over every angle and length
+            # print("NUM STEPS!!!!", n_steps[j])
+            ci = c1 + (step_number * delta)
+            # print('c1__', c1)
+            # print('c1[j], [k],  delta[j], k*delta[j])', j, c1[j], [k], delta[j], k * delta[j])
+            '''
+            print('j=', j, 'k=', k)
+            print('ci[j]',ci[j])
+            print('delta', delta[j])
+            print('c1', c1[j], 'c2', c2[j])
+            print(c1, c2)
+            print(robot_config[-2], robot_config[-1])
+            '''
+            # Convert back to degrees
+            #for angle in range(num_links):
+                #ci[angle] = in_degrees(ci[angle])
+            # ci.insert(0, robot_configuration[i][1])
+            # ci.insert(0, robot_configuration[i][0])
+            ci = list(ci)
             ci.append(robot_configuration[i][-2])
             ci.append(robot_configuration[i][-1])
         # print('new_ci', ci)
 
             new_robot_config_list.append(ci)
-
-    print(new_robot_config_list[0])  # <- DO NOT Uncomment           Unless you want a BAD TIME... IT'S HUGE
+    c2 = list(c2)
+    c2.append(robot_configuration[i][-2])
+    c2.append(robot_configuration[i][-1])
+    new_robot_config_list.append(c2)
+    print(new_robot_config_list[-2])
+    print(new_robot_config_list[-1])
+    # print(new_robot_config_list[-5])  # <- DO NOT Uncomment           Unless you want a BAD TIME... IT'S HUGE
     print(len(new_robot_config_list))
 
     return new_robot_config_list
