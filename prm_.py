@@ -344,6 +344,24 @@ class PRM:
         # self.nodes.append(Node(1,1,1))
         self.num_grapples = len(grapple_points)
 
+    def test_self_collision(self, config, spec):
+        # return true for pass, false for fail
+        if spec.num_segments < 3:
+            # collision impossible with less than 3 segments
+            return True
+        # do full check
+        for i in range(spec.num_segments - 1):
+            p1 = config.points[i]
+            q1 = config.points[i + 1]
+
+            for j in range(i + 2, spec.num_segments):
+                p2 = config.points[j]
+                q2 = config.points[j + 1]
+
+                if test_line_collision((p1, q1), (p2, q2)):
+                    return False
+
+        return True
     def generate_random_points(self):
         """ Generate N random sample points"""
         total = 0
@@ -351,17 +369,23 @@ class PRM:
         while total < self.num_nodes:
             angles = [random.randrange(180)]
             # print('annnngles', angles, type(angles))
-            angles.extend(list(np.random.uniform(-90, 90, self.num_links-1)))
-            print(angles)
+            angles.extend(list(np.random.uniform(-179, 179, self.num_links-1)))
+            radian_angles = deepcopy(angles)
+            for i in range(len(angles)):
+                radian_angles[i] = in_radians(radian_angles[i])
+
+            # print(angles)
             lengths = np.random.uniform(self.min_lengths, self.max_lengths, self.num_links)
 
             # print('angles',angles)
             # print(self.initial_x)
-            config = robot_config.make_robot_config_from_ee1(lengths=lengths, angles=angles,
+            config = robot_config.make_robot_config_from_ee1(lengths=lengths, angles=radian_angles,
                                                              x=self.initial_ee1_x,
-                                                             y=self.initial_ee1_y)
+                                                             y=self.initial_ee1_y, ee1_grappled=True)
+            # print(self.initial_ee1_x, self.initial_ee1_y)
             # print(self.initial_ee1_x, self.initial_ee1_y)
             point = list(config.get_ee2())
+            # print(point)
             # print(point)
             p = Node(point[0], point[1], total + self.num_grapples + 2, angles, self.current_grapple[0],
                      self.current_grapple[1], lengths)
@@ -374,8 +398,10 @@ class PRM:
             '''
             # print(p.point)
             if not in_obstacle(self.obstacle, p) and self.inside_world(p) and test_obstacle_collision(config, self.spec,
-                                                                                                      self.obstacle):
+                                                                                                      self.obstacle) and self.test_self_collision(config, self.spec):
                 self.nodes.append(p)
+                print(point)
+                print(angles)
                 # print(p.configuration)
 
             # Indent line below to ensure N points generated
@@ -396,7 +422,7 @@ class PRM:
     def get_k_neighbours(self):
         """ Pair q (every sample point) to k nearest neighbours (q') """
         # Define number of neighbours k here
-        k_max = 20
+        k_max = 10
         # For every node point get the edge distances that don't intersect obstacles
         for i in self.nodes:
             distances = []
@@ -647,7 +673,7 @@ def write_robot_config_list_to_file(filename, robot_config_list, num_links):
 def main():
     start = time.time()
     # print(np.random.uniform(0, 100, size=10))
-    testcase = 'testcases/3g1_m1.txt'
+    testcase = 'testcases/4g1_m1.txt'
     problem_spec = ProblemSpec(testcase)
 
     # print(problem_spec.obstacles[0].corners)
@@ -748,6 +774,7 @@ def main():
     # Plot the correct path
     try:
         for i in range(len(path) - 1):
+            # print(path[i])
             plt.plot([path[i][0], path[i + 1][0]], [path[i][1], path[i + 1][1]],
                      'r-', zorder=3)
             counter = i
