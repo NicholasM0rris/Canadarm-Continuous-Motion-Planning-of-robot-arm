@@ -46,5 +46,8 @@ Example input files for you to test your solver on.
 
 This file finds the solution to a testcase, and outputs the solution to a text file
 
+`Usage:
+solver.py testcases/3g2_m2.txt output.txt`
+
 ![](old_revisions/armgif.gif)
 
