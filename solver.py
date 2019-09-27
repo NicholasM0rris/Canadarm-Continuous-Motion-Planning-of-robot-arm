@@ -332,7 +332,8 @@ class PRM:
         if self.num_grapples % 2 == 0:
             goal = list(spec.goal.get_ee1())
             self.nodes.append(
-                Node(goal[0], goal[1], 0, self.goal_angles, x2=self.goal_grapple[0], y2=self.goal_grapple[1],
+                Node(spec.goal.get_ee1()[0], spec.goal.get_ee1()[1], 0, self.goal_angles, x2=self.goal_grapple[0],
+                     y2=self.goal_grapple[1],
                      length=self.goal_length))
         else:
             self.nodes.append(
@@ -353,6 +354,37 @@ class PRM:
                 Node(grapple_configuration[0], grapple_configuration[1], 2, grapple_configuration[2:2 + self.num_links],
                      grapple_configuration[-2], grapple_configuration[-1],
                      grapple_configuration[2 + self.num_links:-2]))
+            self.nodes.append(
+                Node(grapple_configuration[0], grapple_configuration[1], 3, grapple_configuration[2:2 + self.num_links],
+                     grapple_configuration[-2], grapple_configuration[-1],
+                     grapple_configuration[2 + self.num_links:-2]))
+
+            node = self.nodes[2].configuration
+            # print('node', node)
+            angles = node[2:2 + self.num_links]
+            for i in range(len(angles)):
+                angles[i] = in_radians(angles[i])
+            # print(angles)
+            lengths = node[2 + self.num_links:-2]
+            # print('lengths', lengths)
+            c = make_robot_config_from_ee1(node[-2], node[-1], angles, node[2 + self.num_links:-2], ee1_grappled=True)
+            # print('ee2 angles', c.ee2_angles)
+            # print('ee1 angles', c.ee1_angles)
+            # print(c.ee2_angles[0].in_degrees())
+            angles = [c.ee2_angles[0].in_radians()]
+            angles.extend(c.ee2_angles[1:])
+            # print('anggles', angles)
+            lengths = c.lengths[:]
+            lengths.reverse()
+            for i in range(len(angles)):
+                angles[i] = in_degrees(angles[i])
+            # new_node = Node(node[-2], node[-1], 2, angles, node[0], node[1], lengths)
+            new_config = [node[-2], node[-1]]
+            new_config.extend(angles)
+            new_config.extend(lengths)
+            new_config.extend([node[0], node[1]])
+            # print('NC', new_config)
+            self.nodes[3].configuration = new_config
         '''
         for i in range(len(grapple_points) - 1):
             print(grapple_points[i + 1])
@@ -408,17 +440,22 @@ class PRM:
                     config = robot_config.make_robot_config_from_ee1(lengths=lengths, angles=radian_angles,
                                                                      x=grapple[0],
                                                                      y=grapple[1], ee1_grappled=True)
+                    point = list(config.get_ee2())
+                    p = Node(point[0], point[1], total + self.num_grapples + 3, angles, self.current_grapple[0],
+                             self.current_grapple[1], lengths)
                 else:
-                    config = robot_config.make_robot_config_from_ee1(lengths=lengths, angles=radian_angles,
+                    config = robot_config.make_robot_config_from_ee2(lengths=lengths, angles=radian_angles,
                                                                      x=grapple[0],
                                                                      y=grapple[1], ee2_grappled=True)
+                    point = list(config.get_ee1())
+                    p = Node(point[0], point[1], total + self.num_grapples + 3, angles, grapple[0],
+                             grapple[1], lengths)
                 # print(self.initial_ee1_x, self.initial_ee1_y)
                 # print(self.initial_ee1_x, self.initial_ee1_y)
-                point = list(config.get_ee2())
+
                 # print(point)
                 # print(point)
-                p = Node(point[0], point[1], total + self.num_grapples + 2, angles, self.current_grapple[0],
-                         self.current_grapple[1], lengths)
+
                 '''
                 p = Node(np.random.uniform(self.x_min, self.x_max, 1)[0],
     
@@ -521,11 +558,12 @@ class PRM:
         c1 = np.array(robot_configuration[0])
         c2 = np.array(robot_configuration[1])
         # Get the diff
+        # print(c1, c2)
         diff = c2 - c1
         # Get the max diff
         max_diff = max(abs(diff))
         # Get the number steps required
-        n_steps = math.ceil(max_diff / 0.05)
+        n_steps = math.ceil(max_diff / 0.03)
         # Find delta for each step
         delta = diff / n_steps
         # Replace nans with 0
@@ -545,7 +583,7 @@ class PRM:
             # If there is a collision return True
             if not test_obstacle_collision(config, self.spec, self.obstacle) or not self.test_self_collision(config,
                                                                                                              self.spec) or not self.inside_world_point(
-                ee2):
+                ee2) or not self.inside_world_point(ee1):
                 return True
         # There is no collision between the interpolation
         return False
@@ -617,7 +655,7 @@ class PRM:
                 print('config of bridge!!!!!', configuration)
                 return configuration
 
-    def solve(self):
+    def solve(self, node1, node2):
         """
         Solve method containing code to perform a breadth first search of the state graph and return a list of
         configs which form a path through the state graph between the initial and the goal.
@@ -625,13 +663,10 @@ class PRM:
         :return: List of configs forming a path through the graph from initial to goal
         """
         # Set initial and goal nodes
-        if self.current_grapple == self.goal_grapple:
-            init_node = self.nodes[1]
-            goal_node = self.nodes[0]
-        else:
-            init_node = self.nodes[1 + self.iteration]
-            # Set the goal node to be another grapple node
-            goal_node = self.nodes[2 + self.iteration]
+
+        init_node = node1
+        goal_node = node2
+
         # print("Initial goal node", goal_node.configuration)
 
         # search the graph
@@ -644,7 +679,7 @@ class PRM:
 
             current = init_container.pop(0)
             # current_copy = deepcopy(current)
-            if current.configuration == goal_node.configuration:  # and goal_node == self.nodes[0]:
+            if current.configuration == goal_node.configuration:
                 # found path to goal
                 # print('found a path to: ', init_visited[-1])
 
@@ -654,8 +689,6 @@ class PRM:
                 # print('parent', current.parent.configuration)
                 # list = self.done(current, init_node)
                 return init_visited[current]
-            elif current.configuration == goal_node.configuration:
-                goal_node = self.nodes[0]
 
             successors = current.get_successors()
             # print('current', current.configuration)
@@ -825,12 +858,44 @@ def main(arglist):
     # Get k neighbours for the random points
     prm.get_k_neighbours()
     # print('obs', in_obstacle(problem_spec.obstacles[0],(0.3,0.2)))
-    path = prm.solve()
-    print('configs to goal', path)
-    new_path = interpolate(path, problem_spec.num_segments)
-    # We need to write a list of primitive steps, extrapolating between the configurations
-    # EE1x, EE1y; angle1, angle2 ... anglen; length1, length 2 ... length 3
-    write_robot_config_list_to_file(arglist[1], new_path, problem_spec.num_segments)
+    if prm.num_grapples > 1:
+
+        path1 = prm.solve(prm.nodes[1], prm.nodes[2])
+        new_path1 = interpolate(path1, problem_spec.num_segments)
+
+        path2 = prm.solve(prm.nodes[3], prm.nodes[0])
+
+        for i in range(len(path2)):
+            path2[i][-2] = prm.grapple[1][0]
+            path2[i][-1] = prm.grapple[1][1]
+
+        new_path2 = interpolate(path2, problem_spec.num_segments)
+        '''
+        goal = [1, 1]
+        angles = problem_spec.goal_angles
+        for i in range(len(angles)):
+            angles[i] = in_radians(angles[i])
+        goal.extend(problem_spec.goal_angles)
+        goal.extend(problem_spec.goal.lengths)
+        goal.extend(problem_spec.goal.points[-1])
+        new_path2.append(goal)
+        '''
+
+        new_path = new_path1 + new_path2
+        write_robot_config_list_to_file(arglist[1], new_path, problem_spec.num_segments)
+
+        # print(path1, path2)
+
+    else:
+        path = prm.solve(prm.nodes[1], prm.nodes[0])
+        print('configs to goal', path)
+
+    if prm.num_grapples == 1:
+        new_path = interpolate(path, problem_spec.num_segments)
+        # We need to write a list of primitive steps, extrapolating between the configurations
+        # EE1x, EE1y; angle1, angle2 ... anglen; length1, length 2 ... length 3
+        write_robot_config_list_to_file(arglist[1], new_path, problem_spec.num_segments)
+
     print('Time required = ', -start + time.time())
     '''
     for i in range(len(list)):
