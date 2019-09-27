@@ -42,6 +42,9 @@ Refer to the documentation at the start of this file for more details.
 
 Example input files for you to test your solver on.
 
+**Solver.py**
 
+This file finds the solution to a testcase, and outputs the solution to a text file
 
+![](old_revisions/armgif.gif)
 
