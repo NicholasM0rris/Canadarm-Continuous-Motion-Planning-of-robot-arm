@@ -52,6 +52,7 @@ solver.py testcases/3g2_m2.txt output.txt`
 ![](old_revisions/armgif.gif)
 
 **PRM**
+
 The candarm uses a Probabilistic Road Map to generate random configurations to use a node points:
 
 ![](old_revisions/search.png)
