@@ -1,8 +1,4 @@
-# Assignment 2 Support Code
-
-This is the support code for COMP3702 2019 Assignment 2.
-
-The following files are provided:
+# Canadarm robot arm
 
 **support/problem_spec.py**
 
@@ -26,8 +22,6 @@ Refer to the documentation at the start of this file for more details.
 
 This file contains the `Angle` class, representing an angle. This class behaves like a normal floating point number, supporting addition, subtraction, multiplication by scalar, division by scalar, negation, equality and comparison. Constructor accepts degrees or radians, and value can be accessed as degrees or radians. Automatically keeps value in the range of -pi and pi.
 
-We suggest using this class when working with angles to avoid having to manually keep the angle within the correct range.
-
 This class also contains static methods for performing trigonometric operations on `Angle` objects.
 
 Refer to the documentation at the start of this file for more details.
@@ -46,8 +40,7 @@ Refer to the documentation at the start of this file for more details.
 
 **testcases**
 
-Example input files for you to test your solver on. You should make sure that your solver is able to produce valid solution files (verified by `tester.py`) for these inputs.
-
+Example input files for you to test your solver on.
 
 
 
