@@ -2,7 +2,7 @@
 
 **support/problem_spec.py**
 
-This file contains the `ProblemSpec` class. This class serves the same purpose as the `SokobanMap` class from the first assignment - it can be used to represent the environment your agent operates in. The constructor for this class takes the filename of the input file as an argument, and handles parsing of the input file. The properties of the environment are stored as class variables within the `ProblemSpec` instance which can be accessed by your code.
+This file contains the `ProblemSpec` class.It can be used to represent the environment your agent operates in. The constructor for this class takes the filename of the input file as an argument, and handles parsing of the input file. The properties of the environment are stored as class variables within the `ProblemSpec` instance which can be accessed by your code.
 
 Refer to the documentation at the start of this file for more details.
 

@@ -49,12 +49,8 @@ class Obstacle:
 
 class ProblemSpec:
     """
-    Class representing a planning problem. You may add to this class if you wish, but you should not modify the existing
-    functions or variable names.
+    Creates a problem spec
 
-    COMP3702 2019 Assignment 2 Support Code
-
-    Last updated by njc 24/08/19
     """
 
     # max allowable error for floating point comparisons
